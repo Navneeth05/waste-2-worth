@@ -3,7 +3,6 @@ uvicorn[standard]
 pydantic
 PyJWT
 mysql-connector-python
-tensorflow-cpu
 h5py
 Pillow
 numpy
