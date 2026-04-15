@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: waste2worth-api
+    env: python
+    buildCommand: pip install -r server/requirements.txt
+    startCommand: gunicorn --worker-class uvicorn.workers.UvicornWorker --chdir server main:app
+    envVars:
+      - key: DB_HOST
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DB_PORT
+        value: "3306"
+      - key: SECRET
+        value: your_secret_key
