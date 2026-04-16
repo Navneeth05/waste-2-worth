@@ -2,7 +2,7 @@ fastapi
 uvicorn[standard]
 pydantic
 PyJWT
-mysql-connector-python
+psycopg2-binary
 tensorflow-cpu
 h5py
 Pillow
@@ -10,4 +10,3 @@ numpy
 python-multipart
 python-dotenv
 gunicorn
-uvicorn

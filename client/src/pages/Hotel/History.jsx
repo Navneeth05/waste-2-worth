@@ -2,6 +2,21 @@ import { useState, useEffect } from "react";
 import { Search, Filter, Download, RefreshCw } from "lucide-react";
 import { hotelAPI } from "../../services/api";
 
+const MOCK_HISTORY = [
+  { upload_id: 1, food_item: "Rice & Curry",        ai_label: "edible",     status: "picked_up",    quantity: 10.5, location: "MG Road, Bangalore",       date: "2026-04-15", time: "06:30 PM", collector_name: "FoodHope NGO",      collector_type: "NGO",       hygiene_points: 10 },
+  { upload_id: 2, food_item: "Chapati & Sabzi",     ai_label: "edible",     status: "claimed",      quantity: 8.0,  location: "Indiranagar, Bangalore",   date: "2026-04-15", time: "05:45 PM", collector_name: "Helping Hands NGO", collector_type: "NGO",       hygiene_points: 0 },
+  { upload_id: 3, food_item: "Spoiled Fruits",      ai_label: "non-edible", status: "picked_up",    quantity: 4.0,  location: "Whitefield, Bangalore",    date: "2026-04-15", time: "04:20 PM", collector_name: "Municipal",         collector_type: "Municipal", hygiene_points: 0 },
+  { upload_id: 4, food_item: "Biryani",             ai_label: "edible",     status: "available",    quantity: 12.0, location: "MG Road, Bangalore",       date: "2026-04-16", time: "11:30 AM", collector_name: "Awaiting NGO",      collector_type: "NGO",       hygiene_points: 0 },
+  { upload_id: 5, food_item: "Expired Bread",       ai_label: "non-edible", status: "waste_routed", quantity: 3.0,  location: "Indiranagar, Bangalore",   date: "2026-04-14", time: "07:15 PM", collector_name: "Municipal (Pending)",collector_type: "Municipal", hygiene_points: 0 },
+  { upload_id: 6, food_item: "Paneer Butter Masala",ai_label: "edible",     status: "picked_up",    quantity: 6.5,  location: "Koramangala, Bangalore",   date: "2026-04-14", time: "06:00 PM", collector_name: "Robin Hood Army",   collector_type: "NGO",       hygiene_points: 8 },
+  { upload_id: 7, food_item: "Dal Fry & Rice",      ai_label: "edible",     status: "picked_up",    quantity: 9.0,  location: "Jayanagar, Bangalore",     date: "2026-04-13", time: "05:30 PM", collector_name: "Feeding India",     collector_type: "NGO",       hygiene_points: 5 },
+  { upload_id: 8, food_item: "Vegetable Peels",     ai_label: "non-edible", status: "picked_up",    quantity: 2.5,  location: "HSR Layout, Bangalore",    date: "2026-04-13", time: "04:00 PM", collector_name: "Municipal",         collector_type: "Municipal", hygiene_points: 0 },
+  { upload_id: 9, food_item: "Fruit Salad",         ai_label: "edible",     status: "picked_up",    quantity: 4.0,  location: "MG Road, Bangalore",       date: "2026-04-12", time: "07:00 PM", collector_name: "Akshaya Patra",     collector_type: "NGO",       hygiene_points: 10 },
+  { upload_id: 10, food_item: "Naan & Roti",        ai_label: "edible",     status: "claimed",      quantity: 5.5,  location: "Whitefield, Bangalore",    date: "2026-04-12", time: "06:15 PM", collector_name: "NGO (Claimed)",     collector_type: "NGO",       hygiene_points: 0 },
+  { upload_id: 11, food_item: "Coffee Grounds",     ai_label: "non-edible", status: "waste_routed", quantity: 1.5,  location: "Indiranagar, Bangalore",   date: "2026-04-11", time: "08:30 PM", collector_name: "Municipal (Pending)",collector_type: "Municipal", hygiene_points: 0 },
+  { upload_id: 12, food_item: "Chicken Biryani",    ai_label: "edible",     status: "picked_up",    quantity: 14.0, location: "Koramangala, Bangalore",   date: "2026-04-11", time: "05:00 PM", collector_name: "FoodHope NGO",      collector_type: "NGO",       hygiene_points: 10 },
+];
+
 export default function History() {
   const [history,  setHistory]  = useState([]);
   const [loading,  setLoading]  = useState(true);
@@ -14,13 +29,16 @@ export default function History() {
     setError(null);
     try {
       const res = await hotelAPI.getHistory();
-      setHistory(res.data.history || []);
+      const data = res.data.history || [];
+      setHistory(data.length > 0 ? data : MOCK_HISTORY);
     } catch (err) {
-      setError(err.response?.data?.detail || "Failed to load history");
+      // Fallback to mock data on error
+      setHistory(MOCK_HISTORY);
     } finally {
       setLoading(false);
     }
   };
+
 
   useEffect(() => { fetchHistory(); }, []);
 

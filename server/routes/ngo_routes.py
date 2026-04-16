@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel
 from typing import Optional
-from core.db import get_db
+from core.db import get_db, get_cursor
 
 router = APIRouter(prefix="/ngo", tags=["NGO"])
 
@@ -38,7 +38,7 @@ def get_available_food(
     if not db:
         raise HTTPException(status_code=500, detail="Database connection failed")
 
-    cursor = db.cursor(dictionary=True)
+    cursor = get_cursor(db)
     try:
         cursor.execute(
             """
@@ -53,14 +53,22 @@ def get_available_food(
                 f.latitude,
                 f.longitude,
                 f.uploaded_at,
-                TIME_FORMAT(f.uploaded_at, '%h:%i %p') AS upload_time
+                TO_CHAR(f.uploaded_at, 'HH12:MI AM') AS upload_time
             FROM food_uploads f
             JOIN users u ON f.hotel_id = u.id
             WHERE f.status = 'available' AND f.ai_label = 'edible'
             ORDER BY f.uploaded_at DESC
             """
         )
-        return {"available": cursor.fetchall()}
+        rows = cursor.fetchall()
+        result = []
+        for row in rows:
+            r = dict(row)
+            if r.get("quantity"): r["quantity"] = float(r["quantity"])
+            if r.get("latitude"): r["latitude"] = float(r["latitude"])
+            if r.get("longitude"): r["longitude"] = float(r["longitude"])
+            result.append(r)
+        return {"available": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
@@ -82,7 +90,7 @@ def claim_food(
     if not db:
         raise HTTPException(status_code=500, detail="Database connection failed")
 
-    cursor = db.cursor(dictionary=True)
+    cursor = get_cursor(db)
     try:
         # Verify the upload exists and is still available
         cursor.execute(
@@ -105,10 +113,10 @@ def claim_food(
             raise HTTPException(status_code=409, detail="Food was just claimed by another NGO")
 
         cursor.execute(
-            "INSERT INTO food_claims (upload_id, ngo_id) VALUES (%s, %s)",
+            "INSERT INTO food_claims (upload_id, ngo_id) VALUES (%s, %s) RETURNING id",
             (upload_id, ngo_id),
         )
-        claim_id = cursor.lastrowid
+        claim_id = cursor.fetchone()["id"]
         db.commit()
         return {"message": "Food claimed successfully", "claim_id": claim_id}
     except HTTPException:
@@ -137,7 +145,7 @@ def confirm_pickup_and_award_points(
     if not db:
         raise HTTPException(status_code=500, detail="Database connection failed")
 
-    cursor = db.cursor(dictionary=True)
+    cursor = get_cursor(db)
     try:
         # Validate claim belongs to this NGO
         cursor.execute(
@@ -218,7 +226,7 @@ def get_ngo_pickups(
     if not db:
         raise HTTPException(status_code=500, detail="Database connection failed")
 
-    cursor = db.cursor(dictionary=True)
+    cursor = get_cursor(db)
     try:
         cursor.execute(
             """
@@ -241,7 +249,13 @@ def get_ngo_pickups(
             """,
             (ngo_id,),
         )
-        return {"pickups": cursor.fetchall()}
+        rows = cursor.fetchall()
+        result = []
+        for row in rows:
+            r = dict(row)
+            if r.get("quantity"): r["quantity"] = float(r["quantity"])
+            result.append(r)
+        return {"pickups": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
@@ -261,7 +275,7 @@ def get_ngo_score(
     if not db:
         raise HTTPException(status_code=500, detail="Database connection failed")
 
-    cursor = db.cursor(dictionary=True)
+    cursor = get_cursor(db)
     try:
         cursor.execute(
             """
@@ -296,7 +310,7 @@ def get_ngo_dashboard(
     if not db:
         raise HTTPException(status_code=500, detail="Database connection failed")
 
-    cursor = db.cursor(dictionary=True)
+    cursor = get_cursor(db)
     try:
         cursor.execute(
             """
@@ -317,7 +331,13 @@ def get_ngo_dashboard(
             """,
             (ngo_id,),
         )
-        return cursor.fetchone() or {}
+        row = cursor.fetchone()
+        if row:
+            r = dict(row)
+            if r.get("meals_served_estimate"):
+                r["meals_served_estimate"] = float(r["meals_served_estimate"])
+            return r
+        return {}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:

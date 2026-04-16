@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Header, UploadFile, File
 from pydantic import BaseModel
 from typing import Optional
-from core.db import get_db
+from core.db import get_db, get_cursor
 from services.ai_model import classify_image
 
 router = APIRouter(prefix="/hotel", tags=["Hotel"])
@@ -78,7 +78,7 @@ def upload_food(
     if not db:
         raise HTTPException(status_code=500, detail="Database connection failed")
 
-    cursor = db.cursor(dictionary=True)
+    cursor = get_cursor(db)
     try:
         # If no GPS provided, use hotel's registered coordinates
         lat, lng = body.latitude, body.longitude
@@ -89,20 +89,21 @@ def upload_food(
             )
             u = cursor.fetchone()
             if u:
-                lat = lat or u.get("latitude")
-                lng = lng or u.get("longitude")
+                lat = lat or (float(u["latitude"]) if u.get("latitude") else None)
+                lng = lng or (float(u["longitude"]) if u.get("longitude") else None)
 
         cursor.execute(
             """
             INSERT INTO food_uploads
                 (hotel_id, food_item, quantity, ai_label, status, location, latitude, longitude, notes)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
             """,
             (hotel_id, body.food_item, body.quantity, body.ai_label,
              status, body.location or "", lat, lng, body.notes or ""),
         )
+        upload_id = cursor.fetchone()["id"]
         db.commit()
-        upload_id = cursor.lastrowid
 
         # Routing message sent back to frontend
         routed_to = "NGO" if body.ai_label == "edible" else "Municipal waste collection"
@@ -134,7 +135,7 @@ def get_hotel_history(
     if not db:
         raise HTTPException(status_code=500, detail="Database connection failed")
 
-    cursor = db.cursor(dictionary=True)
+    cursor = get_cursor(db)
     try:
         cursor.execute(
             """
@@ -148,12 +149,10 @@ def get_hotel_history(
                 f.latitude,
                 f.longitude,
                 f.uploaded_at,
-                DATE(f.uploaded_at)                    AS date,
-                TIME_FORMAT(f.uploaded_at, '%h:%i %p') AS time,
+                TO_CHAR(f.uploaded_at, 'YYYY-MM-DD')  AS date,
+                TO_CHAR(f.uploaded_at, 'HH12:MI AM')  AS time,
 
                 -- Who collected it?
-                -- For edible (NGO): join food_claims -> users
-                -- For non-edible (Municipal): no claims table, mark as Municipal
                 CASE
                     WHEN f.ai_label = 'non-edible' AND f.status = 'picked_up'
                         THEN 'Municipal'
@@ -168,7 +167,6 @@ def get_hotel_history(
                     ELSE '—'
                 END AS collector_name,
 
-                -- Type label: NGO or Municipal
                 CASE
                     WHEN f.ai_label = 'non-edible' THEN 'Municipal'
                     WHEN u_ngo.name IS NOT NULL     THEN 'NGO'
@@ -185,7 +183,19 @@ def get_hotel_history(
             """,
             (hotel_id,),
         )
-        return {"history": cursor.fetchall()}
+        rows = cursor.fetchall()
+        # Convert Decimal types for JSON serialization
+        result = []
+        for row in rows:
+            r = dict(row)
+            if r.get("quantity"):
+                r["quantity"] = float(r["quantity"])
+            if r.get("latitude"):
+                r["latitude"] = float(r["latitude"])
+            if r.get("longitude"):
+                r["longitude"] = float(r["longitude"])
+            result.append(r)
+        return {"history": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
@@ -203,7 +213,7 @@ def get_hotel_dashboard(
     if not db:
         raise HTTPException(status_code=500, detail="Database connection failed")
 
-    cursor = db.cursor(dictionary=True)
+    cursor = get_cursor(db)
     try:
         cursor.execute(
             """
@@ -222,7 +232,13 @@ def get_hotel_dashboard(
             """,
             (hotel_id,),
         )
-        return cursor.fetchone() or {}
+        row = cursor.fetchone()
+        if row:
+            r = dict(row)
+            if r.get("kg_donated"):
+                r["kg_donated"] = float(r["kg_donated"])
+            return r
+        return {}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
@@ -240,7 +256,7 @@ def get_hotel_score(
     if not db:
         raise HTTPException(status_code=500, detail="Database connection failed")
 
-    cursor = db.cursor(dictionary=True)
+    cursor = get_cursor(db)
     try:
         cursor.execute(
             """

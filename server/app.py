@@ -1,8 +1,10 @@
-from core.db import get_db
+from core.db import get_db, get_cursor
 from fastapi import FastAPI, HTTPException, Header
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
+import os
+import jwt
 
 from routes.hotel_routes import router as hotel_router
 from routes.ngo_routes   import router as ngo_router
@@ -22,13 +24,19 @@ SECRET = "your_secret_key"
 
 @app.on_event("startup")
 def startup_event():
-    print("[STARTUP] Waste2Worth API ready!")
+    print("\n" + "="*50)
+    print("WASTE2WORTH API STARTING...")
+    print("="*50)
+    
     db = get_db()
     if db:
-        print("[STARTUP] MySQL connected ✓")
+        print("DATABASE STATUS: CONNECTED (PostgreSQL on Render)")
         db.close()
     else:
-        print("[STARTUP] WARNING: MySQL connection failed!")
+        print("DATABASE STATUS: DISCONNECTED")
+        print("TIP: Ensure PostgreSQL credentials in server/.env are correct.")
+    
+    print("="*50 + "\n")
 
 app.include_router(hotel_router, prefix="/api")
 app.include_router(ngo_router,   prefix="/api")
@@ -69,7 +77,7 @@ def register(req: RegisterRequest):
     if not db:
         raise HTTPException(status_code=500, detail="Database connection failed")
 
-    cursor = db.cursor(dictionary=True)
+    cursor = get_cursor(db)
 
     cursor.execute("SELECT id FROM users WHERE email = %s", (req.email,))
     if cursor.fetchone():
@@ -104,7 +112,7 @@ def login(req: LoginRequest):
     if not db:
         raise HTTPException(status_code=500, detail="Database connection failed")
 
-    cursor = db.cursor(dictionary=True)
+    cursor = get_cursor(db)
     cursor.execute("SELECT * FROM users WHERE email = %s", (req.email,))
     db_user = cursor.fetchone()
     cursor.close(); db.close()
@@ -119,7 +127,6 @@ def login(req: LoginRequest):
     if req.role and db_user["role"] != req.role:
         raise HTTPException(status_code=403, detail=f"Account is not a {req.role} account")
 
-    import jwt
     token = jwt.encode(
         {"email": db_user["email"], "role": db_user["role"], "id": db_user["id"]},
         SECRET, algorithm="HS256",
@@ -135,8 +142,8 @@ def login(req: LoginRequest):
             "email":         db_user["email"],
             "phone":         db_user.get("phone", ""),
             "city":          db_user.get("city", ""),
-            "latitude":      db_user.get("latitude"),
-            "longitude":     db_user.get("longitude"),
+            "latitude":      float(db_user["latitude"]) if db_user.get("latitude") else None,
+            "longitude":     float(db_user["longitude"]) if db_user.get("longitude") else None,
             "notice_points": db_user.get("notice_points", 0),
         },
     }
@@ -157,7 +164,7 @@ def update_profile(
     if not db:
         raise HTTPException(status_code=500, detail="Database connection failed")
     
-    cursor = db.cursor(dictionary=True)
+    cursor = get_cursor(db)
     try:
         # Check email uniqueness (excluding current user)
         cursor.execute("SELECT id FROM users WHERE email=%s AND id!=%s", (body.email, uid))
@@ -198,4 +205,6 @@ def health():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    # Render provides PORT environment variable
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run("app:app", host="0.0.0.0", port=port, reload=False)

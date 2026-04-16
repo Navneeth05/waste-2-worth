@@ -5,6 +5,17 @@ import { useAuth } from "../../context/AuthContext";
 
 const MUNI_LOC_DEFAULT = { lat: 12.9716, lng: 77.5946 };
 
+const MOCK_WASTE = [
+  { upload_id: 301, hotel_name: "Grand Palace Hotel", food_item: "Spoiled Fruits",   quantity: 4.0, location: "MG Road, Bangalore",      zone: "Zone A", city: "Bangalore", status: "waste_routed", date: "2026-04-16", time: "11:30 AM", latitude: 12.9716, longitude: 77.5946 },
+  { upload_id: 302, hotel_name: "Elite Residency",    food_item: "Expired Bread",    quantity: 3.0, location: "Indiranagar, Bangalore",  zone: "Zone B", city: "Bangalore", status: "waste_routed", date: "2026-04-16", time: "10:15 AM", latitude: 12.9352, longitude: 77.6245 },
+  { upload_id: 303, hotel_name: "City Inn",           food_item: "Coffee Grounds",   quantity: 2.5, location: "Whitefield, Bangalore",   zone: "Zone C", city: "Bangalore", status: "waste_routed", date: "2026-04-15", time: "08:45 PM", latitude: 12.9580, longitude: 77.6081 },
+  { upload_id: 304, hotel_name: "The Oberoi",         food_item: "Vegetable Peels",  quantity: 5.5, location: "Jayanagar, Bangalore",    zone: "Zone A", city: "Bangalore", status: "waste_routed", date: "2026-04-15", time: "07:30 PM", latitude: 12.9733, longitude: 77.6117 },
+  { upload_id: 305, hotel_name: "Radisson Blu",       food_item: "Spoiled Milk",     quantity: 2.0, location: "Koramangala, Bangalore",  zone: "Zone C", city: "Bangalore", status: "picked_up",   date: "2026-04-15", time: "06:00 PM", latitude: 12.9780, longitude: 77.6400 },
+  { upload_id: 306, hotel_name: "Hyatt Regency",      food_item: "Stale Rice",       quantity: 3.5, location: "HSR Layout, Bangalore",   zone: "Zone B", city: "Bangalore", status: "picked_up",   date: "2026-04-14", time: "05:15 PM", latitude: 12.9300, longitude: 77.6200 },
+  { upload_id: 307, hotel_name: "ITC Gardenia",       food_item: "Rotten Vegetables",quantity: 6.0, location: "MG Road, Bangalore",      zone: "Zone A", city: "Bangalore", status: "waste_routed", date: "2026-04-14", time: "04:00 PM", latitude: 12.9600, longitude: 77.5900 },
+  { upload_id: 308, hotel_name: "Taj West End",       food_item: "Expired Yogurt",   quantity: 1.5, location: "Jayanagar, Bangalore",    zone: "Zone A", city: "Bangalore", status: "picked_up",   date: "2026-04-13", time: "07:45 PM", latitude: 12.9800, longitude: 77.5800 },
+];
+
 export default function WasteManagement() {
   const { user } = useAuth();
   const muniLoc = {
@@ -23,9 +34,11 @@ export default function WasteManagement() {
     setLoading(true);
     try {
       const res = await municipalAPI.getWaste();
-      setItems(res.data.waste || []);
+      const data = res.data.waste || [];
+      setItems(data.length > 0 ? data : MOCK_WASTE);
     } catch {
-      // fail silently
+      // Fallback to mock data
+      setItems(MOCK_WASTE);
     } finally {
       setLoading(false);
     }

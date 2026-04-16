@@ -159,6 +159,12 @@ export default function Login() {
       {/* ── Left Hero ── */}
       <div className="login-hero">
         <div className="hero-pattern" />
+        <div className="floating-shapes">
+          <div className="floating-shape" />
+          <div className="floating-shape" />
+          <div className="floating-shape" />
+          <div className="floating-shape" />
+        </div>
         <div className="hero-content">
           <div className="hero-logo">
             <div className="hero-logo-icon">🌿</div>

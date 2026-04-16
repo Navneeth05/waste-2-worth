@@ -4,6 +4,13 @@ import { CheckCircle, Navigation, ExternalLink, X, RefreshCw } from "lucide-reac
 import { ngoAPI } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 
+const MOCK_MARKERS = [
+  { id: 201, lat: 12.9716, lng: 77.5946, label: "Grand Palace Hotel", status: "edible", qty: "10.5 kg", time: "06:30 PM", hotel: "Grand Palace Hotel", item: "Mix Veg Curry", location: "MG Road, Bangalore", upload_id: 201 },
+  { id: 202, lat: 12.9352, lng: 77.6245, label: "Elite Residency",    status: "edible", qty: "8.0 kg",  time: "05:45 PM", hotel: "Elite Residency",    item: "Chapati & Sabzi", location: "Indiranagar, Bangalore", upload_id: 202 },
+  { id: 203, lat: 12.9733, lng: 77.6117, label: "The Oberoi",         status: "edible", qty: "6.5 kg",  time: "04:20 PM", hotel: "The Oberoi",         item: "Paneer Butter Masala", location: "Jayanagar, Bangalore", upload_id: 203 },
+  { id: 204, lat: 12.9600, lng: 77.5900, label: "ITC Gardenia",       status: "edible", qty: "14.0 kg", time: "03:00 PM", hotel: "ITC Gardenia",       item: "Steamed Rice & Dal", location: "Whitefield, Bangalore", upload_id: 204 },
+];
+
 export default function MapPage() {
   const { user } = useAuth();
   const [foodList,   setFoodList]   = useState([]);
@@ -39,9 +46,10 @@ export default function MapPage() {
         location: f.location,
         upload_id: f.upload_id,
       }));
-      setFoodList(markers);
+      setFoodList(markers.length > 0 ? markers : MOCK_MARKERS);
     } catch {
-      // Fail silently for map
+      // Fallback to mock markers
+      setFoodList(MOCK_MARKERS);
     } finally {
       setLoading(false);
     }

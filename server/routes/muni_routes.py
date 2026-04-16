@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Header
 from typing import Optional
-from core.db import get_db
+from core.db import get_db, get_cursor
 
 router = APIRouter(prefix="/muni", tags=["Municipal"])
 
@@ -28,7 +28,7 @@ def get_waste_list(
     if not db:
         raise HTTPException(status_code=500, detail="Database connection failed")
 
-    cursor = db.cursor(dictionary=True)
+    cursor = get_cursor(db)
     try:
         cursor.execute(
             """
@@ -44,8 +44,8 @@ def get_waste_list(
                 f.longitude,
                 f.status,
                 f.uploaded_at,
-                DATE(f.uploaded_at)                    AS date,
-                TIME_FORMAT(f.uploaded_at, '%h:%i %p') AS time
+                TO_CHAR(f.uploaded_at, 'YYYY-MM-DD')  AS date,
+                TO_CHAR(f.uploaded_at, 'HH12:MI AM')  AS time
             FROM food_uploads f
             JOIN users u ON f.hotel_id = u.id
             WHERE f.ai_label = 'non-edible'
@@ -54,7 +54,14 @@ def get_waste_list(
             """
         )
         rows = cursor.fetchall()
-        return {"waste": rows}
+        result = []
+        for row in rows:
+            r = dict(row)
+            if r.get("quantity"): r["quantity"] = float(r["quantity"])
+            if r.get("latitude"): r["latitude"] = float(r["latitude"])
+            if r.get("longitude"): r["longitude"] = float(r["longitude"])
+            result.append(r)
+        return {"waste": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
@@ -75,7 +82,7 @@ def mark_collected(
     if not db:
         raise HTTPException(status_code=500, detail="Database connection failed")
 
-    cursor = db.cursor(dictionary=True)
+    cursor = get_cursor(db)
     try:
         cursor.execute(
             "SELECT id, status, ai_label FROM food_uploads WHERE id = %s",
@@ -116,7 +123,7 @@ def get_muni_dashboard(
     if not db:
         raise HTTPException(status_code=500, detail="Database connection failed")
 
-    cursor = db.cursor(dictionary=True)
+    cursor = get_cursor(db)
     try:
         cursor.execute(
             """
@@ -128,10 +135,16 @@ def get_muni_dashboard(
                 (SELECT COALESCE(SUM(quantity), 0) FROM food_uploads
                     WHERE ai_label = 'non-edible')                              AS total_kg,
                 (SELECT COUNT(DISTINCT zone) FROM users
-                    WHERE role = 'hotel' AND zone IS NOT NULL)                   AS zones_active
+                    WHERE role = 'hotel' AND zone IS NOT NULL AND zone != '')    AS zones_active
             """
         )
-        return cursor.fetchone() or {}
+        row = cursor.fetchone()
+        if row:
+            r = dict(row)
+            if r.get("total_kg"):
+                r["total_kg"] = float(r["total_kg"])
+            return r
+        return {}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
