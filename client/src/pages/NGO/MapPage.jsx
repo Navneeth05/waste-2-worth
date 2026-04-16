@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import MapView from "../../components/Mapview";
-import { CheckCircle, Navigation, ExternalLink, X, RefreshCw } from "lucide-react";
+import { CheckCircle, Navigation, ExternalLink, X, RefreshCw, MapPin } from "lucide-react";
 import { ngoAPI } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 
@@ -32,7 +32,6 @@ export default function MapPage() {
     setLoading(true);
     try {
       const res = await ngoAPI.getAvailableFood();
-      // Map DB rows to marker format expected by MapView
       const markers = (res.data.available || []).map((f) => ({
         id:      f.upload_id,
         lat:     parseFloat(f.latitude)  || 12.9716,
@@ -48,7 +47,6 @@ export default function MapPage() {
       }));
       setFoodList(markers.length > 0 ? markers : MOCK_MARKERS);
     } catch {
-      // Fallback to mock markers
       setFoodList(MOCK_MARKERS);
     } finally {
       setLoading(false);
@@ -57,14 +55,14 @@ export default function MapPage() {
 
   useEffect(() => { fetchFood(); }, [fetchFood]);
 
+  // ── Handlers ──────────────────────────────────────────────
   const handleClaim = useCallback(async (marker) => {
     setClaiming(marker.id);
     try {
-      const res = await ngoAPI.claimFood(marker.upload_id);
+      await ngoAPI.claimFood(marker.upload_id || marker.id);
       setClaimedIds((prev) => [...prev, marker.id]);
       setActiveNav(marker);
-      setToast({ type: "success", message: `✅ Claimed ${marker.item} from ${marker.hotel}!` });
-      // Remove from list
+      setToast({ type: "success", message: `Claimed ${marker.item} from ${marker.hotel}!` });
       setFoodList((prev) => prev.filter((f) => f.id !== marker.id));
     } catch (err) {
       setToast({ type: "error", message: err.response?.data?.detail || "Claim failed" });
@@ -74,12 +72,22 @@ export default function MapPage() {
     }
   }, []);
 
-  const cancelNav = () => setActiveNav(null);
+  // Navigate on in-app map (draw route line)
+  const handleNavigateOnMap = useCallback((marker) => {
+    if (activeNav && activeNav.id === marker.id) {
+      setActiveNav(null); // toggle off
+    } else {
+      setActiveNav(marker);
+    }
+  }, [activeNav]);
 
-  const openGoogleNav = (dest) => {
+  // Open Google Maps directions externally
+  const openGoogleNav = useCallback((dest) => {
     const url = `https://www.google.com/maps/dir/${NGO_LOCATION.lat},${NGO_LOCATION.lng}/${dest.lat},${dest.lng}`;
     window.open(url, "_blank");
-  };
+  }, [NGO_LOCATION]);
+
+  const cancelNav = () => setActiveNav(null);
 
   const displayedMarkers = foodList.filter((m) => {
     if (claimedIds.includes(m.id)) return false;
@@ -88,9 +96,6 @@ export default function MapPage() {
   });
 
   const routeLine = activeNav ? { from: NGO_LOCATION, to: activeNav } : null;
-
-  // All claimed markers (for the claimed section below)
-  const claimedMarkers = foodList.filter((m) => claimedIds.includes(m.id));
 
   return (
     <div>
@@ -109,7 +114,7 @@ export default function MapPage() {
         </div>
       )}
 
-      {/* Navigation banner */}
+      {/* Navigation banner — shows when a route is active */}
       {activeNav && (
         <div style={{
           background: "linear-gradient(135deg, #dcfce7, #f0fdf4)",
@@ -127,17 +132,19 @@ export default function MapPage() {
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)" }}>
-              🚗 Navigating to {activeNav.hotel}
+              Navigating to {activeNav.hotel}
             </div>
             <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
-              📍 {activeNav.location} &nbsp;·&nbsp; 🍱 {activeNav.item} ({activeNav.qty}) &nbsp;·&nbsp; ⏰ {activeNav.time}
+              {activeNav.location} &nbsp;&middot;&nbsp; {activeNav.item} ({activeNav.qty}) &nbsp;&middot;&nbsp; {activeNav.time}
             </div>
-            <div style={{ fontSize: 11, color: "var(--green-dark)", fontWeight: 600, marginTop: 4 }}>
-              ✅ Claimed — hotel notified. Go to Pickups to confirm & award points.
-            </div>
+            {claimedIds.includes(activeNav.id) && (
+              <div style={{ fontSize: 11, color: "var(--green-dark)", fontWeight: 600, marginTop: 4 }}>
+                Claimed — hotel notified. Go to Pickups to confirm & award points.
+              </div>
+            )}
           </div>
           <button className="btn btn-ngo btn-sm" onClick={() => openGoogleNav(activeNav)} style={{ gap: 5 }}>
-            <ExternalLink size={13} /> Open in Maps
+            <ExternalLink size={13} /> Open in Google Maps
           </button>
           <button className="btn btn-ghost btn-sm" onClick={cancelNav} style={{ padding: "6px 8px" }}>
             <X size={16} />
@@ -149,31 +156,38 @@ export default function MapPage() {
       <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
         {[
           { v: "all",    label: "All Locations" },
-          { v: "edible", label: "✅ Edible Only" },
+          { v: "edible", label: "Edible Only" },
         ].map(({ v, label }) => (
           <button key={v} className={`btn ${filter === v ? "btn-ngo" : "btn-ghost"} btn-sm`}
             onClick={() => setFilter(v)}>{label}</button>
         ))}
         <button className="btn btn-ghost btn-sm" style={{ gap: 6, marginLeft: "auto" }} onClick={fetchFood}>
-          <RefreshCw size={14} /> {loading ? "Loading…" : "Refresh"}
+          <RefreshCw size={14} /> {loading ? "Loading..." : "Refresh"}
         </button>
         <div style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 12, color: "var(--text-muted)" }}>
           <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
             <span style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--ngo-primary)", display: "inline-block" }} /> Edible
           </span>
+          <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#3b82f6", display: "inline-block" }} /> Your Location
+          </span>
           {claimedIds.length > 0 && (
-            <span style={{ fontWeight: 600, color: "var(--green-dark)" }}>🎉 {claimedIds.length} claimed</span>
+            <span style={{ fontWeight: 600, color: "var(--green-dark)" }}>{claimedIds.length} claimed</span>
           )}
         </div>
       </div>
 
-      {/* Map — pins come from real DB coordinates */}
+      {/* Map with interactive popups — Claim & Navigate directly from markers */}
       <div className="card" style={{ marginBottom: 20, padding: 0, overflow: "hidden" }}>
         <MapView
           markers={displayedMarkers}
-          height={460}
+          height={500}
           routeLine={routeLine}
           ngoLocation={NGO_LOCATION}
+          onClaim={handleClaim}
+          onNavigate={handleNavigateOnMap}
+          onOpenMaps={openGoogleNav}
+          claimingId={claiming}
         />
       </div>
 
@@ -183,7 +197,7 @@ export default function MapPage() {
           <div>
             <div className="card-title">Available Food Locations</div>
             <div className="card-subtitle">
-              {loading ? "Loading from database…" : `${displayedMarkers.length} available · ${claimedIds.length} claimed by you`}
+              {loading ? "Loading from database..." : `${displayedMarkers.length} available - ${claimedIds.length} claimed by you`}
             </div>
           </div>
         </div>
@@ -191,7 +205,7 @@ export default function MapPage() {
         {loading ? (
           <div style={{ textAlign: "center", padding: 32, color: "var(--text-muted)" }}>
             <div className="spinner spinner-dark" style={{ margin: "0 auto 12px", width: 24, height: 24 }} />
-            Loading from database…
+            Loading from database...
           </div>
         ) : (
           <div className="table-wrapper">
@@ -202,33 +216,42 @@ export default function MapPage() {
                   <th>Food</th>
                   <th>Qty</th>
                   <th>Location</th>
-                  <th>Upload Time</th>
+                  <th>Time</th>
                   <th>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {displayedMarkers.length === 0 && (
                   <tr><td colSpan={6} style={{ textAlign: "center", color: "var(--text-muted)", padding: 32 }}>
-                    {claimedIds.length > 0 ? "🎉 All available food claimed!" : "No food available right now"}
+                    {claimedIds.length > 0 ? "All available food claimed!" : "No food available right now"}
                   </td></tr>
                 )}
                 {displayedMarkers.map((m) => (
                   <tr key={m.id}>
-                    <td style={{ fontWeight: 600, color: "var(--text-primary)" }}>🏨 {m.hotel}</td>
-                    <td>🍱 {m.item}</td>
+                    <td style={{ fontWeight: 600, color: "var(--text-primary)" }}>{m.hotel}</td>
+                    <td>{m.item}</td>
                     <td>{m.qty}</td>
-                    <td style={{ fontSize: 12 }}>📍 {m.location}</td>
+                    <td style={{ fontSize: 12 }}>{m.location}</td>
                     <td>{m.time}</td>
                     <td>
-                      {claiming === m.id ? (
-                        <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--ngo-primary)" }}>
-                          <div className="spinner spinner-dark" style={{ width: 14, height: 14 }} /> Claiming…
-                        </span>
-                      ) : (
-                        <button className="btn btn-ngo btn-sm" onClick={() => handleClaim(m)}>
-                          <CheckCircle size={13} /> Claim & Navigate
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        {claiming === m.id ? (
+                          <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--ngo-primary)" }}>
+                            <div className="spinner spinner-dark" style={{ width: 14, height: 14 }} /> Claiming...
+                          </span>
+                        ) : (
+                          <button className="btn btn-ngo btn-sm" onClick={() => handleClaim(m)}>
+                            <CheckCircle size={13} /> Claim
+                          </button>
+                        )}
+                        <button
+                          className={`btn ${activeNav?.id === m.id ? "btn-ngo" : "btn-ghost"} btn-sm`}
+                          onClick={() => handleNavigateOnMap(m)}
+                          style={{ gap: 4 }}
+                        >
+                          <MapPin size={13} /> {activeNav?.id === m.id ? "Navigating" : "Navigate"}
                         </button>
-                      )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -241,7 +264,7 @@ export default function MapPage() {
         {claimedIds.length > 0 && (
           <div style={{ marginTop: 20 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)", marginBottom: 10 }}>
-              ✅ Your Claimed Pickups This Session
+              Your Claimed Pickups This Session
             </div>
             {foodList.filter((m) => claimedIds.includes(m.id)).map((m) => (
               <div key={m.id} style={{
@@ -252,14 +275,17 @@ export default function MapPage() {
                 <CheckCircle size={16} color="#16a34a" />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>
-                    {m.hotel} — {m.item} ({m.qty})
+                    {m.hotel} - {m.item} ({m.qty})
                   </div>
                   <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                    📍 {m.location} &nbsp;·&nbsp; Hotel notified
+                    {m.location} - Hotel notified
                   </div>
                 </div>
-                <button className="btn btn-ngo btn-sm" onClick={() => { setActiveNav(m); openGoogleNav(m); }} style={{ gap: 4 }}>
-                  <Navigation size={13} /> Navigate
+                <button className="btn btn-ghost btn-sm" onClick={() => { setActiveNav(m); }} style={{ gap: 4 }}>
+                  <MapPin size={13} /> Show on Map
+                </button>
+                <button className="btn btn-ngo btn-sm" onClick={() => openGoogleNav(m)} style={{ gap: 4 }}>
+                  <Navigation size={13} /> Google Maps
                 </button>
               </div>
             ))}
