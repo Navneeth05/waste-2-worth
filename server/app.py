@@ -2,6 +2,7 @@ from core.db import get_db, get_cursor
 from fastapi import FastAPI, HTTPException, Header
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 from typing import Optional
 import os
 import jwt
@@ -10,7 +11,29 @@ from routes.hotel_routes import router as hotel_router
 from routes.ngo_routes   import router as ngo_router
 from routes.muni_routes  import router as muni_router
 
-app = FastAPI(title="Waste2Worth API", version="2.0.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # ── Startup ──────────────────────────────────────────────────
+    print("\n" + "="*50)
+    print("WASTE2WORTH API STARTING...")
+    print("="*50)
+    try:
+        db = get_db()
+        if db:
+            print("DATABASE STATUS: CONNECTED (PostgreSQL on Render)")
+            db.close()
+        else:
+            print("DATABASE STATUS: DISCONNECTED")
+            print("TIP: Ensure PostgreSQL credentials in server/.env are correct.")
+    except Exception as exc:
+        print(f"DATABASE STATUS: ERROR — {exc}")
+        print("Server will continue running. Endpoints requiring DB will return 500.")
+    print("="*50 + "\n")
+    yield
+    # ── Shutdown ─────────────────────────────────────────────────
+    print("Waste2Worth API shutting down.")
+
+app = FastAPI(title="Waste2Worth API", version="2.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -21,22 +44,6 @@ app.add_middleware(
 )
 
 SECRET = "your_secret_key"
-
-@app.on_event("startup")
-def startup_event():
-    print("\n" + "="*50)
-    print("WASTE2WORTH API STARTING...")
-    print("="*50)
-    
-    db = get_db()
-    if db:
-        print("DATABASE STATUS: CONNECTED (PostgreSQL on Render)")
-        db.close()
-    else:
-        print("DATABASE STATUS: DISCONNECTED")
-        print("TIP: Ensure PostgreSQL credentials in server/.env are correct.")
-    
-    print("="*50 + "\n")
 
 app.include_router(hotel_router, prefix="/api")
 app.include_router(ngo_router,   prefix="/api")

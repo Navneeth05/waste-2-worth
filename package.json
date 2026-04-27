@@ -4,8 +4,9 @@
   "description": "Root workspace to run both client and server automatically",
   "scripts": {
     "install:client": "cd client && npm install",
-    "dev:server": "cd server && python main.py",
+    "dev:server": "cd server && python app.py",
     "dev:client": "cd client && npm run dev",
+    "db-check": "cd server && python check_db.py",
     "dev": "npx concurrently \"npm run dev:server\" \"npm run dev:client\""
   }
 }

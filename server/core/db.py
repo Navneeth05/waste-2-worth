@@ -15,7 +15,7 @@ DB_CONFIG = {
     "password": os.getenv("DB_PASSWORD", ""),
     "dbname":   os.getenv("DB_NAME", "waste2worth"),
     "port":     int(os.getenv("DB_PORT", 5432)),
-    "sslmode":  "require",   # Render requires SSL
+    "sslmode":  os.getenv("DB_SSLMODE", "require"),  # Set DB_SSLMODE=disable for local dev
 }
 
 def get_db():
